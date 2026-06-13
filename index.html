@@ -1956,7 +1956,7 @@ body::before {
       PARTIDOS.forEach((p,i)=>{glookup[p.local+"||"+p.visit]=i});
       const allTeams=[...new Set(PARTIDOS.flatMap(p=>[p.local,p.visit]))];
       for(const line of lines){
-        const m=line.match(/(.+?)\s+vs\s+(.+?)\s+(\d+)\s*[-—]\s*(\d+)/i);
+        const m=line.match(/(.+?)\s+vs\s+(.+?)\s*(\d+)\s*[-—]\s*(\d+)/i);
         if(!m)continue;
         let loc=m[1].replace(/Grupo [A-Z]/,"").replace(/Fecha \d+/,"").trim();
         let vis=m[2].trim();

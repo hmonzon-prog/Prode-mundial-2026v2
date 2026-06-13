@@ -1919,7 +1919,18 @@ body::before {
         for(let i=1;i<=pdf.numPages;i++){
           const pg=await pdf.getPage(i);
           const c=await pg.getTextContent();
-          text+=c.items.map(it=>it.str).join(" ")+"\n";
+          let lastY = null;
+          for(const it of c.items){
+            const y = Math.round(it.transform[5]);
+            if(lastY !== null && Math.abs(lastY - y) > 2){
+              text += "
+";
+            }
+            text += it.str + " ";
+            lastY = y;
+          }
+          text += "
+";
         }
         const datos=parsearPDFText(text);
         if(!datos){status.innerHTML=`<div class="msg warn">No se pudieron extraer las predicciones. ¿Es un PDF generado desde el Prode?</div>`;return}

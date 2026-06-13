@@ -850,7 +850,49 @@
       .score-input input { width: 30px; font-size: 0.8rem; }
       #modal-contenido { width: 94%; padding: 24px 16px; }
     }
-  </style>
+  
+    :root {
+      --bg: #050505 !important;
+      --card-bg: rgba(15, 15, 25, 0.75) !important;
+      --card-border: rgba(147, 51, 234, 0.3) !important;
+      --primary: #9333ea !important;
+      --primary-hover: #a855f7 !important;
+      --secondary: #0ea5e9 !important;
+      --secondary-hover: #38bdf8 !important;
+      --neon-glow: 0 0 10px rgba(147,51,234,0.5), 0 0 20px rgba(147,51,234,0.3);
+    }
+    body {
+      background: #050505 radial-gradient(circle at 50% 0%, #201040, #050505 70%) !important;
+    }
+    .flag {
+      width: 22px; height: 16px; border-radius: 3px; object-fit: cover;
+      box-shadow: 0 0 4px rgba(255,255,255,0.1); flex-shrink: 0;
+    }
+    .eq.local { display: flex; align-items: center; justify-content: flex-end; gap: 8px; text-align: right; }
+    .eq.visit { display: flex; align-items: center; justify-content: flex-start; gap: 8px; text-align: left; }
+    
+    .partido {
+      transition: all 0.2s ease;
+    }
+    .partido:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);
+      border-color: rgba(147, 51, 234, 0.5);
+      background: rgba(30, 20, 50, 0.8);
+    }
+    .btn-primary {
+      box-shadow: 0 0 10px rgba(147,51,234,0.6);
+      animation: pulse-glow 2s infinite;
+    }
+    @keyframes pulse-glow {
+      0% { box-shadow: 0 0 8px rgba(147,51,234,0.6); }
+      50% { box-shadow: 0 0 16px rgba(147,51,234,1); }
+      100% { box-shadow: 0 0 8px rgba(147,51,234,0.6); }
+    }
+    .hl h2 {
+      text-shadow: 0 0 10px rgba(147,51,234,0.8);
+    }
+</style>
 </head>
 <body>
   <div class="container" id="app">
@@ -942,6 +984,22 @@
       {local:"Panamá", visit:"Inglaterra", grupo:"L", fecha:"27/6"},
       {local:"Croacia", visit:"Ghana", grupo:"L", fecha:"27/6"}
     ];
+
+    const FLAGS = {
+      "México":"mx", "Sudáfrica":"za", "Corea del Sur":"kr", "República Checa":"cz",
+      "Canadá":"ca", "Bosnia y Herzegovina":"ba", "Catar":"qa", "Suiza":"ch",
+      "Brasil":"br", "Marruecos":"ma", "Haití":"ht", "Escocia":"gb-sct",
+      "Estados Unidos":"us", "Paraguay":"py", "Australia":"au", "Turquía":"tr",
+      "Alemania":"de", "Curazao":"cw", "Costa de Marfil":"ci", "Ecuador":"ec",
+      "Países Bajos":"nl", "Japón":"jp", "Suecia":"se", "Túnez":"tn",
+      "Bélgica":"be", "Egipto":"eg", "Irán":"ir", "Nueva Zelanda":"nz",
+      "España":"es", "Cabo Verde":"cv", "Arabia Saudita":"sa", "Uruguay":"uy",
+      "Francia":"fr", "Senegal":"sn", "Irak":"iq", "Noruega":"no",
+      "Argentina":"ar", "Argelia":"dz", "Austria":"at", "Jordania":"jo",
+      "Portugal":"pt", "RD Congo":"cd", "Uzbekistán":"uz", "Colombia":"co",
+      "Inglaterra":"gb-eng", "Croacia":"hr", "Ghana":"gh", "Panamá":"pa"
+    };
+
 
     const GRUPOS = ["A","B","C","D","E","F","G","H","I","J","K","L"];
     const EQUIPOS = [...new Set(PARTIDOS.flatMap(p=>[p.local,p.visit]))].sort();
@@ -1357,7 +1415,7 @@
           const editable=!bloqueado||ADMIN_MODE;
           html+=`<div class="partido${cerrado?' cerrado':''}">
             ${cerrado?`<span class="cerrado-badge">🔒 Cerrado</span>`:''}
-            <div class="eq local">${p.local}</div>
+            <div class="eq local">${p.local} <img src="https://flagcdn.com/24x18/${FLAGS[p.local]}.png" class="flag" alt=""></div>
             <div class="score-input">
               ${cerrado
                 ?`<span class="score-display">${r.gl}-${r.gv}</span>`
@@ -1369,7 +1427,7 @@
               }
               ${!cerrado&&ptsG!==null?`<span class="pts-badge pts-${ptsG}">${ptsG}p</span>`:''}
             </div>
-            <div class="eq visit">${p.visit}</div>
+            <div class="eq visit"><img src="https://flagcdn.com/24x18/${FLAGS[p.visit]}.png" class="flag" alt=""> ${p.visit}</div>
             <div class="fecha">${p.fecha}</div>
           </div>`;
         }

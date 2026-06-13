@@ -1961,8 +1961,17 @@ body::before {
         let loc=m[1].replace(/Grupo [A-Z]/,"").replace(/Fecha \d+/,"").trim();
         let vis=m[2].trim();
         const gl=parseInt(m[3]),gv=parseInt(m[4]);
-        if(!allTeams.includes(loc)||!allTeams.includes(vis))continue;
-        const gk=loc+"||"+vis;
+        const simpl = s => s.toLowerCase().replace(/[áéíóú]/g, m => ({'á':'a','é':'e','í':'i','ó':'o','ú':'u'}[m])).replace(/[^a-z]/g,'');
+        const allTeamsSimpl = allTeams.map(t => ({ orig: t, s: simpl(t) }));
+        const findTeam = name => {
+          const sn = simpl(name);
+          const match = allTeamsSimpl.find(t => t.s === sn || (sn.length > 3 && t.s.includes(sn)) || (t.s.length > 3 && sn.includes(t.s)));
+          return match ? match.orig : null;
+        };
+        const realLoc = findTeam(loc);
+        const realVis = findTeam(vis);
+        if(!realLoc || !realVis) continue;
+        const gk=realLoc+"||"+realVis;
         const gi=glookup[gk];
         if(gi!==undefined)res[gi]={gl,gv};
       }

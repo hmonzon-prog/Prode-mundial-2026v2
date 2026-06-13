@@ -1577,47 +1577,89 @@
     }
 
     // === PDF EXPORT & RESTORE ===
-    function descargarPDF(key){
+﻿    function descargarPDF(key){
       const usr=bd.usuarios[key];
       if(!usr||!usr.resultados){alert("No hay datos para generar PDF");return;}
       const reales=bd.reales||[];
-      const w=window.open("","","width=750,height=900");
-      let h=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Prode - ${usr.nombre}</title>
-      <style>
-        body{font-family:-apple-system,sans-serif;padding:20px;color:#1a1a2e}
-        h1{font-size:20px;margin-bottom:2px}
-        .sub{font-size:12px;color:#6b7280;margin-bottom:12px;border-bottom:2px solid #2563eb;padding-bottom:6px}
-        .g{display:inline-block;width:154px;vertical-align:top;margin:0 12px 14px 0;border:1px solid #e5e7eb;border-radius:8px;padding:6px;box-sizing:border-box}
-        .g h2{font-size:13px;color:#2563eb;margin:6px 0 2px;border-bottom:1px solid #ddd;padding-bottom:2px}
-        .f{font-size:10px;color:#999;margin:4px 0 1px;font-weight:500}
-        .m{display:flex;justify-content:space-between;padding:1px 0;font-size:11px}
-        .m .pred{font-weight:700;min-width:40px;text-align:center}
-        .m .pts{color:#059669;font-weight:600;min-width:24px;text-align:right}
-        .extra{font-size:11px;margin-bottom:10px;color:#333}
-      </style></head><body>
-      <h1>Prode Mundial 2026</h1>
-      <div class="sub">${usr.nombre} ${usr.apellido} - ${usr.fecha||'-'}</div>`;
-      if(usr.campeon||usr.goleador)
-        h+=`<div class="extra">Campeon: ${usr.campeon||'-'} &nbsp; Goleador: ${usr.goleador||'-'}</div>`;
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+      const W=210; let y=15;
+
+      // Header
+      doc.setFillColor(37,99,235);
+      doc.rect(0,0,W,22,\"F\");
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(16);doc.setFont("helvetica","bold");
+      doc.text("Prode Mundial 2026",W/2,10,{align:"center"});
+      doc.setFontSize(10);doc.setFont("helvetica","normal");
+      doc.text(`${usr.nombre} ${usr.apellido} - ${usr.fecha||'-'}`,W/2,17,{align:"center"});
+      y=28;
+
+      // Campeon / Goleador
+      if(usr.campeon||usr.goleador){
+        doc.setTextColor(30,30,30);
+        doc.setFontSize(9);doc.setFont("helvetica","bold");
+        doc.text(`Campeon: ${usr.campeon||'-'}   Goleador: ${usr.goleador||'-'}`,14,y);
+        y+=7;
+      }
+
+      // Groups layout: 3 columns
+      const colW=60; const colX=[14,77,140];
+      let col=0; let colY=[y,y,y];
+
       for(const g of GRUPOS){
-        h+=`<div class="g"><h2>Grupo ${g}</h2>`;
         const matches=PARTIDOS.map((p,i)=>({...p,i})).filter(p=>p.grupo===g);
+        const blockH=8+matches.length*5+4;
+        if(colY[col]+blockH > 285){col++;if(col>2){col=0;y=Math.max(...colY)+5;colY=[y,y,y];}}
+        const cx=colX[col]; let cy=colY[col];
+
+        doc.setFillColor(239,246,255);
+        doc.rect(cx,cy,colW,7,"F");
+        doc.setTextColor(37,99,235);
+        doc.setFontSize(8);doc.setFont("helvetica","bold");
+        doc.text(`Grupo ${g}`,cx+2,cy+5);
+        cy+=8;
+
         for(let mi=0;mi<matches.length;mi++){
-          if(mi%2===0){const nf=Math.floor(mi/2)+1;h+=`<div class="f">Fecha ${nf}</div>`}
           const m=matches[mi];
           const r=usr.resultados[m.i];
           const score=r?`${r.gl}-${r.gv}`:"?-?";
           const real=reales[m.i];
           const pts=calcularPts(r,real);
-          h+=`<div class="m"><span>${m.local} vs ${m.visit}</span><span class="pred">${score}</span>${real?`<span style="color:#d29922;font-size:10px">[${real.gl}-${real.gv}]</span>`:''}<span class="pts">${pts!==null?pts+'p':''}</span></div>`;
-        }
-        h+=`</div>`;
-      }
-      h+=`<script>window.onload=function(){window.print();window.close()}<`+`/script></body></html>`;
-      w.document.write(h);
-      w.document.close();
-    }
 
+          doc.setFont("helvetica","normal");
+          doc.setFontSize(7);
+          doc.setTextColor(30,30,30);
+          const matchText=`${m.local} vs ${m.visit}`;
+          doc.text(matchText,cx+2,cy,{maxWidth:38});
+          doc.setFont("helvetica","bold");
+          doc.setTextColor(37,99,235);
+          doc.text(score,cx+42,cy,{align:"center"});
+          if(real){
+            doc.setFont("helvetica","normal");
+            doc.setTextColor(180,120,0);
+            doc.text(`[${real.gl}-${real.gv}]`,cx+52,cy);
+          }
+          if(pts!==null){
+            doc.setTextColor(pts===3?5:pts===1?37:150, pts===3?150:99,pts===3?80:235);
+            doc.setFont("helvetica","bold");
+            doc.text(`${pts}p`,cx+57,cy,{align:"right"});
+          }
+          cy+=5;
+        }
+        colY[col]=cy+3;
+        col++;if(col>2)col=0;
+      }
+
+      // Footer
+      const totalY=Math.max(...colY)+5;
+      doc.setDrawColor(220,220,220);
+      doc.line(14,totalY,W-14,totalY);
+      doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont("helvetica","normal");
+      doc.text(`Generado el ${new Date().toLocaleDateString("es-AR")}`,W/2,totalY+5,{align:"center"});
+
+      doc.save(`prode-${usr.nombre}-${usr.apellido}.pdf`);
+    }
     function compartirRanking(){
       const entries=Object.entries(bd.usuarios).filter(([k])=>k!=="admin_admin");
       const reales=bd.reales||[];

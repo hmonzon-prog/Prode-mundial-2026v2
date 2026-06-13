@@ -1923,14 +1923,12 @@ body::before {
           for(const it of c.items){
             const y = Math.round(it.transform[5]);
             if(lastY !== null && Math.abs(lastY - y) > 2){
-              text += "
-";
+              text += "\n";
             }
             text += it.str + " ";
             lastY = y;
           }
-          text += "
-";
+          text += "\n";
         }
         const datos=parsearPDFText(text);
         if(!datos){status.innerHTML=`<div class="msg warn">No se pudieron extraer las predicciones. ¿Es un PDF generado desde el Prode?</div>`;return}

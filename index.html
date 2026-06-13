@@ -1989,8 +1989,8 @@ body::before {
       let nombre="",apellido="",campeon="",goleador="";
       for(const line of headerLines){
         let cleaned = line.replace(/Prode Mundial 2026/i, "").trim();
-        let m=cleaned.match(/^(.+?)\s*[\-\u2013]\s+\d/);
-        if(m&&!nombre){
+        let m=cleaned.match(/^(.+?)\s*[\-\u2013\u2014—,]\s*\d/);
+        if(m&&!nombre&&!m[1].toLowerCase().includes("vs")){
           const p=m[1].trim().split(/\s+/);
           if(p.length>=1){nombre=p[0];apellido=p.slice(1).join(" ");continue}
         }
@@ -2007,6 +2007,12 @@ body::before {
       const findTeam = name => {
         const sn = simpl(name);
         if(!sn)return null;
+        
+        // Manual aliases
+        if(sn === "republicacheca") return "Rep. Checa";
+        if(sn === "estadosunidos") return "EE. UU.";
+        if(sn === "bosniayherzegovina") return "Bosnia";
+        
         // Exact match first
         let match = allTeamsSimpl.find(t => t.s === sn);
         if(match)return match.orig;

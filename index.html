@@ -1915,39 +1915,86 @@ body::before {
       try{
         const buf=await file.arrayBuffer();
         const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-        let text="";
+        // Collect ALL text items with their X,Y positions across all pages
+        const allItems=[];
+        let pageYOffset=0;
         for(let i=1;i<=pdf.numPages;i++){
           const pg=await pdf.getPage(i);
           const c=await pg.getTextContent();
-          let lastY = null;
+          const pageH=pg.view[3]||842;
           for(const it of c.items){
-            const y = Math.round(it.transform[5]);
-            if(lastY !== null && Math.abs(lastY - y) > 2){
-              text += "\n";
-            }
-            text += it.str + " ";
-            lastY = y;
+            if(!it.str||!it.str.trim())continue;
+            allItems.push({
+              str:it.str,
+              x:Math.round(it.transform[4]),
+              y:Math.round(pageYOffset+pageH-it.transform[5])
+            });
           }
-          text += "\n";
+          pageYOffset+=pageH;
         }
-        const datos=parsearPDFText(text);
+        // Sort items top-to-bottom, left-to-right
+        allItems.sort((a,b)=>a.y-b.y||a.x-b.x);
+        // Group items into logical rows (same Y within tolerance of 3 units)
+        const rows=[];
+        let curRow=[];
+        let curY=null;
+        for(const it of allItems){
+          if(curY!==null&&Math.abs(it.y-curY)>3){
+            if(curRow.length)rows.push({y:curY,items:[...curRow]});
+            curRow=[];
+          }
+          curRow.push(it);
+          curY=it.y;
+        }
+        if(curRow.length)rows.push({y:curY,items:[...curRow]});
+        // Detect column boundaries from the data
+        // jsPDF uses mm units * 2.835 for PDF points
+        // col0 starts at x~40(14mm), col1 at x~218(77mm), col2 at x~397(140mm)
+        const COL_SPLITS=[130,310];
+        const getCol=x=>x<COL_SPLITS[0]?0:x<COL_SPLITS[1]?1:2;
+        // Build per-column text lines
+        const colLines=[[],[],[]];
+        for(const row of rows){
+          const byCols=[[],[],[]];
+          for(const it of row.items){
+            byCols[getCol(it.x)].push(it);
+          }
+          for(let c=0;c<3;c++){
+            if(byCols[c].length){
+              byCols[c].sort((a,b)=>a.x-b.x);
+              const lineText=byCols[c].map(it=>it.str).join(" ").replace(/\s+/g," ").trim();
+              if(lineText)colLines[c].push(lineText);
+            }
+          }
+        }
+        // Build full text for header extraction
+        let fullText=rows.map(r=>{
+          r.items.sort((a,b)=>a.x-b.x);
+          return r.items.map(it=>it.str).join(" ").replace(/\s+/g," ").trim();
+        }).join("\n");
+        // Combine column lines for match parsing
+        const matchLines=[...colLines[0],...colLines[1],...colLines[2]];
+        console.log("PDF extraction: "+allItems.length+" items, "+rows.length+" rows, columns: "+colLines[0].length+"/"+colLines[1].length+"/"+colLines[2].length+" lines");
+        const datos=parsearPDFText(fullText,matchLines);
         if(!datos){status.innerHTML=`<div class="msg warn">No se pudieron extraer las predicciones. ¿Es un PDF generado desde el Prode?</div>`;return}
         mostrarConfirmacionRestauracion(datos);
         status.innerHTML="";
       }catch(e){status.innerHTML=`<div class="msg warn">Error al leer el PDF: ${e.message}</div>`}
     }
 
-    function parsearPDFText(text){
-      const lines=text.split("\n").map(l=>l.replace(/\s+/g," ").trim()).filter(l=>l);
+    function parsearPDFText(fullText,matchLines){
+      // fullText = all rows joined (for header/campeon/goleador extraction)
+      // matchLines = per-column lines (for accurate match extraction)
+      const headerLines=fullText.split("\n").map(l=>l.replace(/\s+/g," ").trim()).filter(l=>l);
       let nombre="",apellido="",campeon="",goleador="";
-      for(const line of lines){
+      for(const line of headerLines){
         let cleaned = line.replace(/Prode Mundial 2026/i, "").trim();
-        let m=cleaned.match(/^(.+?)\s*[-—]\s+\d/);
+        let m=cleaned.match(/^(.+?)\s*[\-\u2013]\s+\d/);
         if(m&&!nombre){
           const p=m[1].trim().split(/\s+/);
           if(p.length>=1){nombre=p[0];apellido=p.slice(1).join(" ");continue}
         }
-        m=line.match(/Campeon:\s*(.+?)\s+Goleador:\s*(.+)/i);
+        m=line.match(/Campe[o\u00f3]n:\s*(.+?)\s+Goleador:\s*(.+)/i);
         if(m){campeon=m[1].trim();goleador=m[2].trim();continue}
       }
       if(!nombre)return null;
@@ -1955,26 +2002,61 @@ body::before {
       const glookup={};
       PARTIDOS.forEach((p,i)=>{glookup[p.local+"||"+p.visit]=i});
       const allTeams=[...new Set(PARTIDOS.flatMap(p=>[p.local,p.visit]))];
-      for(const line of lines){
-        const m=line.match(/(.+?)\s+vs\s+(.+?)\s*(\d+)\s*[-—]\s*(\d+)/i);
-        if(!m)continue;
-        let loc=m[1].replace(/Grupo [A-Z]/,"").replace(/Fecha \d+/,"").trim();
-        let vis=m[2].trim();
-        const gl=parseInt(m[3]),gv=parseInt(m[4]);
-        const simpl = s => s.toLowerCase().replace(/[áéíóú]/g, m => ({'á':'a','é':'e','í':'i','ó':'o','ú':'u'}[m])).replace(/[^a-z]/g,'');
-        const allTeamsSimpl = allTeams.map(t => ({ orig: t, s: simpl(t) }));
-        const findTeam = name => {
-          const sn = simpl(name);
-          const match = allTeamsSimpl.find(t => t.s === sn || (sn.length > 3 && t.s.includes(sn)) || (t.s.length > 3 && sn.includes(t.s)));
-          return match ? match.orig : null;
-        };
-        const realLoc = findTeam(loc);
-        const realVis = findTeam(vis);
-        if(!realLoc || !realVis) continue;
-        const gk=realLoc+"||"+realVis;
-        const gi=glookup[gk];
-        if(gi!==undefined)res[gi]={gl,gv};
+      const simpl = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"");
+      const allTeamsSimpl = allTeams.map(t => ({ orig: t, s: simpl(t) }));
+      const findTeam = name => {
+        const sn = simpl(name);
+        if(!sn)return null;
+        // Exact match first
+        let match = allTeamsSimpl.find(t => t.s === sn);
+        if(match)return match.orig;
+        // Substring match (both ways)
+        match = allTeamsSimpl.find(t => (sn.length > 3 && t.s.includes(sn)) || (t.s.length > 3 && sn.includes(t.s)));
+        return match ? match.orig : null;
+      };
+      // Parse match results from column-separated lines
+      const vsRegex=/(.+?)\s+vs\s+(.+?)\s+(\d+)\s*[\-\u2013]\s*(\d+)/gi;
+      let foundCount=0;
+      for(const line of matchLines){
+        let m;
+        vsRegex.lastIndex=0;
+        while((m=vsRegex.exec(line))!==null){
+          let loc=m[1].replace(/Grupo\s*[A-L]/gi,"").replace(/Fecha\s*\d+/gi,"").trim();
+          let vis=m[2].trim();
+          const gl=parseInt(m[3]),gv=parseInt(m[4]);
+          // Clean artifacts from team names
+          loc=loc.replace(/^[\s\d.]+/,"").trim();
+          vis=vis.replace(/\[.*?\]/g,"").replace(/\d+p$/,"").trim();
+          const realLoc = findTeam(loc);
+          const realVis = findTeam(vis);
+          if(!realLoc || !realVis){
+            console.log("PDF Parser: no match for",JSON.stringify(loc),"vs",JSON.stringify(vis));
+            continue;
+          }
+          const gk=realLoc+"||"+realVis;
+          const gi=glookup[gk];
+          if(gi!==undefined){res[gi]={gl,gv};foundCount++;}
+        }
       }
+      // Fallback: also try fullText lines for any missed matches
+      for(const line of headerLines){
+        let m;
+        const rx2=/(.+?)\s+vs\s+(.+?)\s+(\d+)\s*[\-\u2013]\s*(\d+)/gi;
+        while((m=rx2.exec(line))!==null){
+          let loc=m[1].replace(/Grupo\s*[A-L]/gi,"").replace(/Fecha\s*\d+/gi,"").trim();
+          let vis=m[2].trim();
+          const gl=parseInt(m[3]),gv=parseInt(m[4]);
+          loc=loc.replace(/^[\s\d.]+/,"").trim();
+          vis=vis.replace(/\[.*?\]/g,"").replace(/\d+p$/,"").trim();
+          const realLoc = findTeam(loc);
+          const realVis = findTeam(vis);
+          if(!realLoc || !realVis) continue;
+          const gk=realLoc+"||"+realVis;
+          const gi=glookup[gk];
+          if(gi!==undefined && res[gi]===null){res[gi]={gl,gv};foundCount++;}
+        }
+      }
+      console.log("PDF Parser: found "+foundCount+" of 72 matches");
       return{nombre,apellido,campeon,goleador,resultados:res};
     }
 
